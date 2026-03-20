@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AlphaSignal — AI Stock Predictor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-mark">&#945;</span>
+        <span class="logo-text">AlphaSignal</span>
+        <span class="logo-sub">AI Quant Engine</span>
+      </div>
+      <div class="search-bar">
+        <input id="tickerInput" type="text" placeholder="AAPL, TSLA, MSFT..." maxlength="10" autocomplete="off" />
+        <select id="periodSelect">
+          <option value="1y">1 Year</option>
+          <option value="2y" selected>2 Years</option>
+          <option value="5y">5 Years</option>
+          <option value="10y">10 Years</option>
+        </select>
+        <select id="horizonSelect">
+          <option value="1">1-Day</option>
+          <option value="3">3-Day</option>
+          <option value="5" selected>5-Day</option>
+          <option value="10">10-Day</option>
+          <option value="20">20-Day</option>
+        </select>
+        <button id="analyzeBtn" onclick="runAnalysis()">
+          Analyze
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="main">
+    <!-- Landing state -->
+    <div id="landingState" class="landing">
+      <div class="landing-icon">&#945;</div>
+      <h2>Quantitative Stock Intelligence</h2>
+      <p>Powered by the <strong>Adaptive Entropy Momentum Index (AEMI)</strong> &mdash; an original indicator that measures market predictability via information entropy, then weights momentum signals accordingly.</p>
+      <p class="landing-sub">Select a prediction horizon (1/3/5/10/20 day), a lookback period, and enter any ticker.</p>
+      <div class="landing-chips">
+        <button class="chip" onclick="quickAnalyze('AAPL')">AAPL</button>
+        <button class="chip" onclick="quickAnalyze('TSLA')">TSLA</button>
+        <button class="chip" onclick="quickAnalyze('NVDA')">NVDA</button>
+        <button class="chip" onclick="quickAnalyze('MSFT')">MSFT</button>
+        <button class="chip" onclick="quickAnalyze('SPY')">SPY</button>
+        <button class="chip" onclick="quickAnalyze('AMZN')">AMZN</button>
+        <button class="chip" onclick="quickAnalyze('GOOG')">GOOG</button>
+        <button class="chip" onclick="quickAnalyze('META')">META</button>
+      </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loadingState" class="loading hidden">
+      <div class="spinner"></div>
+      <p id="loadingText">Fetching market data...</p>
+      <div class="loading-steps">
+        <span id="step1" class="step">Fetching data</span>
+        <span id="step2" class="step">Computing 18+ indicators</span>
+        <span id="step3" class="step">Training ensemble model</span>
+        <span id="step4" class="step">Running backtest</span>
+        <span id="step5" class="step">Generating signal</span>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorState" class="error-state hidden">
+      <div class="error-icon">!</div>
+      <p id="errorMessage">Something went wrong.</p>
+      <button onclick="reset()">Try Again</button>
+    </div>
+
+    <!-- Results -->
+    <div id="resultsState" class="results hidden">
+      <!-- Top bar -->
+      <div class="results-header">
+        <div class="ticker-info">
+          <h1 id="resTickerName">&mdash;</h1>
+          <span id="resPrice" class="price">&mdash;</span>
+          <span id="resHorizon" class="horizon-badge">&mdash;</span>
+        </div>
+        <div class="header-actions">
+          <div class="tab-bar" id="tabBar">
+            <button class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
+            <button class="tab" data-tab="backtest" onclick="switchTab('backtest')">Backtest</button>
+            <button class="tab" data-tab="indicators" onclick="switchTab('indicators')">Indicators</button>
+            <button class="tab" data-tab="about" onclick="switchTab('about')">About AEMI</button>
+          </div>
+          <button class="back-btn" onclick="reset()">New Search</button>
+        </div>
+      </div>
+
+      <!-- ==================== TAB: OVERVIEW ==================== -->
+      <div class="tab-content active" id="tab-overview">
+        <!-- Signal card (hero) -->
+        <div class="signal-hero" id="signalHero">
+          <div class="signal-left">
+            <div class="signal-label">Prediction Signal</div>
+            <div class="signal-direction" id="signalDirection">&mdash;</div>
+            <div class="signal-prob" id="signalProb">&mdash;</div>
+          </div>
+          <div class="signal-right">
+            <div class="gauge-wrap">
+              <canvas id="gaugeCanvas" width="180" height="100"></canvas>
+              <div class="gauge-label" id="gaugeLabel">&mdash;</div>
+            </div>
+          </div>
+          <div class="signal-stats">
+            <div class="sstat">
+              <span class="sstat-label">Model Accuracy</span>
+              <span class="sstat-value" id="resAccuracy">&mdash;</span>
+            </div>
+            <div class="sstat">
+              <span class="sstat-label">Signal Strength</span>
+              <span class="sstat-value" id="resStrength">&mdash;</span>
+            </div>
+            <div class="sstat">
+              <span class="sstat-label">Market Regime</span>
+              <span class="sstat-value" id="resRegime">&mdash;</span>
+            </div>
+            <div class="sstat">
+              <span class="sstat-label">Fractal Dimension</span>
+              <span class="sstat-value" id="resFractal">&mdash;</span>
+            </div>
+            <div class="sstat">
+              <span class="sstat-label">Hurst Exponent</span>
+              <span class="sstat-value" id="resHurst">&mdash;</span>
+            </div>
+            <div class="sstat">
+              <span class="sstat-label">Backtest Win Rate</span>
+              <span class="sstat-value" id="resWinRate">&mdash;</span>
+            </div>
+            <div class="sstat">
+              <span class="sstat-label">Conf-Filtered Win</span>
+              <span class="sstat-value" id="resConfWin">&mdash;</span>
+            </div>
+            <div class="sstat">
+              <span class="sstat-label">Features Selected</span>
+              <span class="sstat-value" id="resFeatures">&mdash;</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts row -->
+        <div class="charts-grid">
+          <div class="chart-card wide">
+            <div class="chart-title">Price + Bollinger Bands</div>
+            <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-title">ML Prediction Probability (Bullish %)</div>
+            <div class="chart-wrap"><canvas id="predChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">AEMI &mdash; Adaptive Entropy Momentum Index <span class="badge-new">NOVEL</span></div>
+            <div class="chart-wrap"><canvas id="aemiChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">RSI (14)</div>
+            <div class="chart-wrap"><canvas id="rsiChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">MACD</div>
+            <div class="chart-wrap"><canvas id="macdChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Stochastic Oscillator</div>
+            <div class="chart-wrap"><canvas id="stochChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Volume</div>
+            <div class="chart-wrap"><canvas id="volChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Top Feature Importance</div>
+            <div class="chart-wrap"><canvas id="featChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== TAB: BACKTEST ==================== -->
+      <div class="tab-content" id="tab-backtest">
+        <!-- Backtest summary cards -->
+        <div class="bt-summary">
+          <div class="bt-card">
+            <div class="bt-card-label">Total Predictions</div>
+            <div class="bt-card-value" id="btTotal">&mdash;</div>
+          </div>
+          <div class="bt-card">
+            <div class="bt-card-label">Correct</div>
+            <div class="bt-card-value green" id="btCorrect">&mdash;</div>
+          </div>
+          <div class="bt-card">
+            <div class="bt-card-label">Win Rate</div>
+            <div class="bt-card-value" id="btWinRate">&mdash;</div>
+          </div>
+          <div class="bt-card">
+            <div class="bt-card-label">Avg Precision</div>
+            <div class="bt-card-value" id="btPrecision">&mdash;</div>
+          </div>
+          <div class="bt-card">
+            <div class="bt-card-label">Avg Recall</div>
+            <div class="bt-card-value" id="btRecall">&mdash;</div>
+          </div>
+          <div class="bt-card">
+            <div class="bt-card-label">Avg F1 Score</div>
+            <div class="bt-card-value" id="btF1">&mdash;</div>
+          </div>
+          <div class="bt-card">
+            <div class="bt-card-label">Max Win Streak</div>
+            <div class="bt-card-value green" id="btMaxWin">&mdash;</div>
+          </div>
+          <div class="bt-card">
+            <div class="bt-card-label">Max Loss Streak</div>
+            <div class="bt-card-value red" id="btMaxLoss">&mdash;</div>
+          </div>
+          <div class="bt-card" style="border-color: var(--cyan);">
+            <div class="bt-card-label">Conf-Filtered Total</div>
+            <div class="bt-card-value" id="btConfTotal">&mdash;</div>
+          </div>
+          <div class="bt-card" style="border-color: var(--cyan);">
+            <div class="bt-card-label">Conf-Filtered Correct</div>
+            <div class="bt-card-value cyan" id="btConfCorrect">&mdash;</div>
+          </div>
+          <div class="bt-card" style="border-color: var(--cyan);">
+            <div class="bt-card-label">Conf-Filtered Win Rate</div>
+            <div class="bt-card-value" id="btConfWinRate">&mdash;</div>
+          </div>
+        </div>
+
+        <!-- Confusion matrix -->
+        <div class="bt-section">
+          <h3 class="panel-title">Confusion Matrix (Out-of-Sample)</h3>
+          <div class="confusion-grid">
+            <div class="cm-empty"></div>
+            <div class="cm-header">Predicted UP</div>
+            <div class="cm-header">Predicted DOWN</div>
+            <div class="cm-row-header">Actual UP</div>
+            <div class="cm-cell cm-tp" id="cmTP">0</div>
+            <div class="cm-cell cm-fn" id="cmFN">0</div>
+            <div class="cm-row-header">Actual DOWN</div>
+            <div class="cm-cell cm-fp" id="cmFP">0</div>
+            <div class="cm-cell cm-tn" id="cmTN">0</div>
+          </div>
+        </div>
+
+        <!-- Backtest charts -->
+        <div class="charts-grid">
+          <div class="chart-card wide">
+            <div class="chart-title">Prediction Accuracy Over Time (Predicted vs Actual)</div>
+            <div class="chart-wrap chart-wrap-tall"><canvas id="btAccuracyChart"></canvas></div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-title">Equity Curve: Model Strategy vs Buy-and-Hold</div>
+            <div class="chart-wrap chart-wrap-tall"><canvas id="btEquityChart"></canvas></div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-title">Rolling Accuracy (20-period window)</div>
+            <div class="chart-wrap"><canvas id="btRollingChart"></canvas></div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-title">Prediction Confidence Distribution</div>
+            <div class="chart-wrap"><canvas id="btConfidenceChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- CV panel -->
+        <div class="bt-section">
+          <h3 class="panel-title">Cross-Validation Metrics (5-Fold Time-Series Split)</h3>
+          <div class="cv-metrics-grid">
+            <div class="cv-metric-col">
+              <h4>Accuracy</h4>
+              <div class="cv-bars" id="cvAccBars"></div>
+            </div>
+            <div class="cv-metric-col">
+              <h4>Precision</h4>
+              <div class="cv-bars" id="cvPrecBars"></div>
+            </div>
+            <div class="cv-metric-col">
+              <h4>Recall</h4>
+              <div class="cv-bars" id="cvRecBars"></div>
+            </div>
+            <div class="cv-metric-col">
+              <h4>F1 Score</h4>
+              <div class="cv-bars" id="cvF1Bars"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== TAB: INDICATORS ==================== -->
+      <div class="tab-content" id="tab-indicators">
+        <div class="indicator-panel">
+          <h3 class="panel-title">Current Indicator Readings</h3>
+          <div class="indicator-grid">
+            <div class="ind-card highlight">
+              <div class="ind-name">AEMI <span class="badge-new">NOVEL</span></div>
+              <div class="ind-value" id="indAemi">&mdash;</div>
+              <div class="ind-hint" id="indAemiHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">RSI (14)</div>
+              <div class="ind-value" id="indRsi">&mdash;</div>
+              <div class="ind-bar-wrap"><div class="ind-bar" id="indRsiBar"></div></div>
+              <div class="ind-hint" id="indRsiHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">MACD</div>
+              <div class="ind-value" id="indMacd">&mdash;</div>
+              <div class="ind-hint" id="indMacdHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">Stochastic %K / %D</div>
+              <div class="ind-value" id="indStoch">&mdash;</div>
+              <div class="ind-bar-wrap"><div class="ind-bar" id="indStochBar"></div></div>
+              <div class="ind-hint" id="indStochHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">Williams %R</div>
+              <div class="ind-value" id="indWilliams">&mdash;</div>
+              <div class="ind-hint" id="indWilliamsHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">CCI (20)</div>
+              <div class="ind-value" id="indCci">&mdash;</div>
+              <div class="ind-hint" id="indCciHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">ADX (14)</div>
+              <div class="ind-value" id="indAdx">&mdash;</div>
+              <div class="ind-bar-wrap"><div class="ind-bar" id="indAdxBar"></div></div>
+              <div class="ind-hint" id="indAdxHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">MFI (14)</div>
+              <div class="ind-value" id="indMfi">&mdash;</div>
+              <div class="ind-bar-wrap"><div class="ind-bar" id="indMfiBar"></div></div>
+              <div class="ind-hint" id="indMfiHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">ROC (12)</div>
+              <div class="ind-value" id="indRoc">&mdash;</div>
+              <div class="ind-hint" id="indRocHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">BB Position</div>
+              <div class="ind-value" id="indBB">&mdash;</div>
+              <div class="ind-bar-wrap"><div class="ind-bar" id="indBBBar"></div></div>
+              <div class="ind-hint" id="indBBHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">Volume Ratio</div>
+              <div class="ind-value" id="indVol">&mdash;</div>
+              <div class="ind-hint" id="indVolHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">ATR (14)</div>
+              <div class="ind-value" id="indAtr">&mdash;</div>
+              <div class="ind-hint" id="indAtrHint">&mdash;</div>
+            </div>
+            <div class="ind-card highlight">
+              <div class="ind-name">Hurst Exponent <span class="badge-new">KEY</span></div>
+              <div class="ind-value" id="indHurst">&mdash;</div>
+              <div class="ind-bar-wrap"><div class="ind-bar" id="indHurstBar"></div></div>
+              <div class="ind-hint" id="indHurstHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">Z-Score (20)</div>
+              <div class="ind-value" id="indZscore">&mdash;</div>
+              <div class="ind-hint" id="indZscoreHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">Order Flow Imbalance</div>
+              <div class="ind-value" id="indOfi">&mdash;</div>
+              <div class="ind-hint" id="indOfiHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">MTF Convergence</div>
+              <div class="ind-value" id="indMtf">&mdash;</div>
+              <div class="ind-bar-wrap"><div class="ind-bar" id="indMtfBar"></div></div>
+              <div class="ind-hint" id="indMtfHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">Autocorrelation (lag-1)</div>
+              <div class="ind-value" id="indAutocorr">&mdash;</div>
+              <div class="ind-hint" id="indAutocorrHint">&mdash;</div>
+            </div>
+            <div class="ind-card">
+              <div class="ind-name">Volatility Regime</div>
+              <div class="ind-value" id="indVolRegime">&mdash;</div>
+              <div class="ind-bar-wrap"><div class="ind-bar" id="indVolRegimeBar"></div></div>
+              <div class="ind-hint" id="indVolRegimeHint">&mdash;</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== TAB: ABOUT ==================== -->
+      <div class="tab-content" id="tab-about">
+        <div class="aemi-explanation">
+          <h3>About the Adaptive Entropy Momentum Index (AEMI)</h3>
+          <div class="aemi-cols">
+            <div class="aemi-col">
+              <h4>The Problem</h4>
+              <p>Classic momentum indicators (MACD, RSI) treat all market regimes equally. But markets oscillate between <em>predictable</em> trending phases and <em>random</em> efficient phases. Using the same signal in both regimes generates massive false positives.</p>
+            </div>
+            <div class="aemi-col">
+              <h4>The Solution</h4>
+              <p>AEMI computes the <strong>Shannon entropy</strong> of the rolling log-return distribution to measure how "random" the market is right now. A <em>predictability weight W = 1 &minus; H_norm</em> then scales the momentum signal &mdash; shrinking it toward zero during high-entropy (chaotic) periods.</p>
+            </div>
+            <div class="aemi-col">
+              <h4>The Formula</h4>
+              <pre class="formula">H    = -Sum p(ri) * log2 p(ri)
+W    = 1 - H / log2(n_bins)
+M    = EMA_10 / EMA_30 - 1
+V    = tanh(Vol / EMA_Vol - 1)
+AEMI = M * W * (1 + 0.35*V)</pre>
+            </div>
+          </div>
+          <div class="aemi-detail">
+            <h4>Why This Works</h4>
+            <p>Renaissance Technologies famously exploited market inefficiencies using mathematical models. The key insight is that market efficiency is not constant &mdash; it fluctuates. During periods of herding, panic, or momentum cascades, prices become temporarily predictable. AEMI detects these windows by measuring the information entropy of the return distribution.</p>
+            <ul>
+              <li><strong>Low entropy</strong> = returns are clustered/trending = high predictability = strong AEMI signal</li>
+              <li><strong>High entropy</strong> = returns are dispersed/random = low predictability = AEMI near zero</li>
+              <li><strong>Volume confirmation</strong> = moves backed by volume participation are more reliable</li>
+            </ul>
+            <h4>Model Architecture</h4>
+            <p>The prediction engine uses an ensemble of <strong>Random Forest</strong> (300 trees) and <strong>Gradient Boosting</strong> (150 estimators), combining their probability outputs. Features include 18+ technical indicators, 20 lag features, and 6 rolling statistics. All evaluated with proper time-series cross-validation to prevent lookahead bias.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
