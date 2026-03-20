@@ -7,8 +7,16 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from sklearn.feature_selection import mutual_info_classif
+import requests
+import time
 import warnings
 warnings.filterwarnings('ignore')
+
+# Fix for cloud servers: set a browser-like user-agent so Yahoo doesn't block us
+yf_session = requests.Session()
+yf_session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+})
 
 # Try to import xgboost; fall back to sklearn GradientBoosting
 try:
@@ -37,9 +45,21 @@ class StockPredictor:
     # Data fetching
     # ------------------------------------------------------------------
     def fetch_data(self):
-        stock = yf.Ticker(self.ticker)
-        self.df = stock.history(period=self.period)
-        if self.df.empty:
+        # Use custom session with browser user-agent to avoid Yahoo blocking
+        # cloud server IPs (Render, Railway, etc.)
+        for attempt in range(3):
+            try:
+                stock = yf.Ticker(self.ticker, session=yf_session)
+                self.df = stock.history(period=self.period)
+                if not self.df.empty:
+                    break
+            except Exception:
+                if attempt < 2:
+                    time.sleep(2)
+                    continue
+                raise
+
+        if self.df is None or self.df.empty:
             raise ValueError(f"No data found for ticker '{self.ticker}'")
         self.df.index = pd.to_datetime(self.df.index)
         return self.df
